@@ -22,6 +22,7 @@
 package org.matsim.pt2matsim.osm;
 
 import org.apache.log4j.Logger;
+import org.matsim.api.core.v01.Coord;
 import org.matsim.api.core.v01.Id;
 import org.matsim.api.core.v01.TransportMode;
 import org.matsim.api.core.v01.network.Link;
@@ -87,6 +88,8 @@ public class OsmMultimodalNetworkConverter {
 	protected OsmConverterConfigGroup config;
 	protected Network network;
 	protected long id = 0;
+	protected long nodeId = 0;
+	protected Set<String> toRemove = new HashSet<String>();
 
 	protected AllowedTagsFilter ptFilter;
 	protected OsmConverterConfigGroup.OsmWayParams ptDefaultParams;
@@ -270,6 +273,9 @@ public class OsmMultimodalNetworkConverter {
 			}
 		}
 
+		log.info("Densify the network...");
+		densify();
+
 		log.info("= conversion statistics: ==========================");
 		log.info("MATSim: # nodes created: " + this.network.getNodes().size());
 		log.info("MATSim: # links created: " + this.network.getLinks().size());
@@ -294,6 +300,116 @@ public class OsmMultimodalNetworkConverter {
 		}
 		log.info("= end of conversion statistics ====================");
 	}
+
+
+	protected void densify(){
+		for(Link link : this.network.getLinks().values())
+			addIntermediateNode(link, link.getFromNode(), link.getToNode());
+	}
+
+	private void addIntermediateNode(Link link, Node lastNode, Node node) {
+		if(toRemove.contains(link.getId().toString()))
+			return;
+		double length = CoordUtils.calcEuclideanDistance(lastNode.getCoord(), node.getCoord());
+		if(length > config.getMaxLinkLength()) {
+			Double newX = (lastNode.getCoord().getX() + node.getCoord().getX())/2.0;
+			Double newY = (lastNode.getCoord().getY() + node.getCoord().getY())/2.0;
+
+			Node newNode = createNode(nodeId, new Coord(newX, newY));
+			nodeId --;
+			this.network.addNode(newNode);
+
+			// create new links around the node
+			Link link1 = createLink(link, lastNode, newNode, lastNode, node, CoordUtils.calcEuclideanDistance(lastNode.getCoord(), newNode.getCoord()));
+			Link link2 = createLink(link, newNode, node, lastNode, node, CoordUtils.calcEuclideanDistance(newNode.getCoord(), node.getCoord()));
+
+			// if link is two way, also remove long link other way
+			if(isTwoWay(link)){
+				Id<Link> lidAft = Id.get(String.valueOf(Long.parseUnsignedLong(link.getId().toString())+1), Link.class);
+				if(network.getLinks().get(lidAft) != null && network.getLinks().get(lidAft).getFromNode() == node 
+						&& network.getLinks().get(lidAft).getToNode() == lastNode) {
+					osmIds.remove(lidAft, osmData.getWays().get(osmIds.get(lidAft)));
+					this.network.removeLink(lidAft);
+					toRemove.add(lidAft.toString());
+				}
+			}
+			// remove long link that now has been split
+			osmIds.remove(link.getId(), osmData.getWays().get(osmIds.get(link.getId())));
+			this.network.removeLink(link.getId());
+			toRemove.add(link.getId().toString());
+
+			// recursively densify the new links
+			addIntermediateNode(link1, lastNode,newNode);
+			addIntermediateNode(link2, newNode, node);
+		}
+	}
+
+	private boolean isTwoWay(Link link) {
+		Osm.Way way = osmData.getWays().get(osmIds.get(link.getId()));
+		boolean oneway = getWayDefaultParams(way).getOneway();
+		boolean onewayReverse = false;
+
+		if("roundabout".equals(way.getTags().get(Osm.Key.JUNCTION))) {
+			// if "junction" is not set in tags, get() returns null and equals() evaluates to false
+			oneway = true;
+		}
+		String onewayTag = way.getTags().get(Osm.Key.ONEWAY);
+		if(onewayTag != null) {
+			if(Osm.Value.YES.equals(onewayTag)) {
+				oneway = true;
+			} else if("true".equals(onewayTag)) {
+				oneway = true;
+			} else if("1".equals(onewayTag)) {
+				oneway = true;
+			} else if("-1".equals(onewayTag)) {
+				onewayReverse = true;
+				oneway = false;
+			} else if("no".equals(onewayTag)) {
+				oneway = false; // may be used to overwrite defaults
+			}
+		}
+		return (!oneway && !onewayReverse);
+	}
+
+	private Node createNode(long nodeId, Coord coord) {
+		Node nn = this.network.getFactory().createNode(Id.create(nodeId, Node.class), coord);
+		return nn;
+	}
+
+	protected Link createLink(Link link, Node fromNode, Node toNode, Node oldFrom, Node oldTo,double length) {
+		// only create link, if both nodes were found, node could be null, since nodes outside a layer were dropped
+		Id<Node> fromId = Id.create(fromNode.getId(), Node.class);
+		Id<Node> toId = Id.create(toNode.getId(), Node.class);
+		if(network.getNodes().get(fromId) != null && network.getNodes().get(toId) != null) {
+			// forward link (in OSM digitization direction)
+			Id<Link> linkId = Id.create(this.id, Link.class);
+			Link l = network.getFactory().createLink(linkId, network.getNodes().get(fromId), network.getNodes().get(toId));
+			l.setLength(length);
+			l.setFreespeed(link.getFreespeed());
+			l.setCapacity(link.getCapacity());
+			l.setNumberOfLanes(link.getNumberOfLanes());
+			l.setAllowedModes(link.getAllowedModes());
+
+			Osm.Way way = osmData.getWays().get(osmIds.get(link.getId()));
+			network.addLink(l);
+			osmIds.put(l.getId(), way.getId());
+			//geometryExporter.addLinkDefinition(linkId, new LinkDefinition(fromNode, toNode, way));
+			this.id++;
+
+			// if is two way, add a link other way
+			if(isTwoWay(link)) {
+				Id<Link> lidAft = Id.get(String.valueOf(Long.parseUnsignedLong(link.getId().toString())+1), Link.class);
+				if(network.getLinks().get(lidAft)!= null && network.getLinks().get(lidAft).getFromNode() == oldTo 
+						&& network.getLinks().get(lidAft).getToNode() ==oldFrom) {
+					Link linkToUpdate = network.getLinks().get(lidAft);
+					createLink(linkToUpdate, toNode, fromNode, oldTo, oldFrom, CoordUtils.calcEuclideanDistance(toNode.getCoord(), fromNode.getCoord()));
+				}
+			}
+			return l;
+		}
+		return null;
+	}
+
 
 	/**
 	 * Creates a MATSim link from OSM data
