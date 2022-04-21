@@ -25,6 +25,8 @@ import org.matsim.pt2matsim.tools.NetworkTools;
 
 /**
  * Run this class to create a multimodal MATSim network from OSM.
+ * If Java heap space error simplify network first with
+ * osmosis --read-pbf file=filename.osm.pbf --tf accept-ways highway=* railway=lightrail,subway,tram completeWays=yes --un --write-xml file=filename.osm
  *
  * @author polettif
  */
