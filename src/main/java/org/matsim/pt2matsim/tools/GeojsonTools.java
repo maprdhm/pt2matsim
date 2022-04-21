@@ -19,6 +19,8 @@
 package org.matsim.pt2matsim.tools;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+
 import org.geojson.*;
 import org.matsim.api.core.v01.Coord;
 import org.matsim.api.core.v01.network.Link;
@@ -35,7 +37,9 @@ public class GeojsonTools {
 
 	public static void writeFeatureCollectionToFile(FeatureCollection featureCollection, String outFile) {
 		try (FileWriter file = new FileWriter(outFile)) {
-			String json = new ObjectMapper().writeValueAsString(featureCollection);
+			ObjectMapper mapper = new ObjectMapper();
+			mapper.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
+			String json = mapper.writeValueAsString(featureCollection);
 			file.write(json);
 			file.flush();
 
