@@ -50,3 +50,33 @@ To include pt2matsim in your own maven project, add this snippet to your pom.xml
     </dependencies>
 
 The master branch contains the snapshot version with the latest changes. Clone the git repository to use it.
+
+
+
+### Example usage
+
+#### 1-Osm2MultimodalNetwork
+/home/geompr/Documents/Leeds/RAIM/code/RAIM/matsim-raim/original-input-data/configFileWestmidlands.xml
+
+/home/geompr/Documents/Leeds/RAIM/code/RAIM/matsim-raim/original-input-data/configFileWinnipeg.xml
+
+
+#### 2-Gtfs2TransitSchedule
+/home/geompr/Documents/Leeds/RAIM/code/RAIM/data/westmidlands/supply/tfwm_gtfs "20221121" EPSG:27700 unmapped_transit_schedule_monday.xml vehicles_monday.xml
+
+/home/geompr/Documents/Leeds/RAIM/code/RAIM/data/winnipeg/supply/winnipeg_gtfs_filtered "20211213" EPSG:3158 unmapped_transit_schedule_monday.xml vehicles_monday.xml
+
+if vehicles file is generated: check networkMode and correct manually if needed
+
+
+#### 3-PublicTransitMapper
+/home/geompr/Documents/Leeds/RAIM/code/RAIM/matsim-raim/original-input-data/configPTMapperWestmidlands.xml
+
+/home/geompr/Documents/Leeds/RAIM/code/RAIM/matsim-raim/original-input-data/configPTMapperWinnipeg.xml
+
+
+#### 4-CheckMappedSchedulePlausibility
+/home/geompr/Documents/Leeds/RAIM/code/RAIM/data/westmidlands/transit_schedule_monday.xml /home/geompr/Documents/Leeds/RAIM/code/RAIM/data/westmidlands/network_multimodal_monday.xml EPSG:27700 /home/geompr/Documents/Leeds/RAIM/code/RAIM/data/westmidlands/plausibilityCheck_monday/
+
+/home/geompr/Documents/Leeds/RAIM/code/RAIM/data/winnipeg/transit_schedule_monday.xml /home/geompr/Documents/Leeds/RAIM/code/RAIM/data/winnipeg/network_multimodal_monday.xml EPSG:3158  /home/geompr/Documents/Leeds/RAIM/code/RAIM/data/winnipeg/plausibilityCheck_monday/
+
